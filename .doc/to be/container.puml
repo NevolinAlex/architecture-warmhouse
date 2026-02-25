@@ -1,0 +1,77 @@
+@startuml Диаграмма контейнеров To Be
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Context.puml
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Container.puml
+
+SHOW_PERSON_OUTLINE()
+
+Person_Ext(warmhouse_client, "Пользователь", "Пользователь системы отопления компании «Тёплый дом»")
+
+System_Ext(warmhouse_client_install, "IoT устройства пользователя", "Хабы, термостаты, ворота, датчики температуры, камеры, освещение, шторы и т.д.")
+
+System_Boundary(warmhouse, "Система контроля и мониторинга температуры и отопления компании «Тёплый дом»") {
+    Container(web_app, "WEB-интерфейс системы «Тёплый дом»", "ReactJS", "Предоставляет пользовательский интерфейс работы с системой «Тёплый дом»")
+    Container(auth_service, "Сервис управления пользователями", "Keycloak", "Управляет пользователями и полномочиях; аутентифицирует и авторизует пользователей в системе")
+    Container(device_manager_service, "Сервис инвентаризации и управления устройствами", "Java", "Регистрирует/привязывает устройства к пользователю/дому; предоставляет справочник устройств; управляет устройствами")
+    Container(device_monitoring_service, "Сервис мониторинга устройств", "Java", "Собирает состояние/данные с устройств")
+    Container(scenario_manager_service, "Сервис управления сценариями", "Java", "Управляет пользовательскими сценариями")
+    Container(scenario_executor_service, "Сервис исполнения сценариев", "Java", "Исполняет запланированные сценарии")
+    Container(audit_events_service, "Сервис аудита пользователей и устройств", "Java", "Предоставляет пользователям историю действий/событий")
+
+
+    ContainerDb(user_db, "СУБД пользователей", "PostgresSQL", "Хранит пользователей, роли, полномочия")
+    ContainerDb(audit_db, "СУБД событий пользователей (аудит) системы", "ClickHouse", "Хранение пользовательских событий")
+    ContainerDb(device_db, "СУБД устройств", "PostgresSQL", "Хранит справочники устройств, зарегистрированные устройства, текущее состояние всех устройств")
+    ContainerDb(scenario_db, "СУБД сценариев", "PostgresSQL", "Хранит пользовательские сценарии, запланированные задачи на исполнение")
+
+    Container(audit_events_data_bus, "Шина данных событий пользователей/устройств в системе", "Kafka", "Сохраняет/предоставляет события пользователей/устройств в системе")
+    Container(service_events_data_bus, "Шина данных событий сервисов", "Kafka", "Сохраняет/предоставляет сервисные события в системе")
+}
+
+'Авторизация/аутентификация/пользователи
+Rel(warmhouse_client, web_app, "Регистрация/авторизация в системе")
+Rel(web_app, auth_service, "Регистрация/авторизация/аутентификация пользователей в системе")
+Rel(auth_service, user_db, "Управление пользователями в системе")
+Rel(auth_service, user_db, "Хранение/получение токенов пользователей")
+
+Rel(device_manager_service, auth_service, "Авторизация пользователей в части инвентаризации устройств пользователя")
+Rel(device_manager_service, auth_service, "Авторизация пользователей в части управления устройствами")
+Rel(scenario_manager_service, auth_service, "Авторизация пользователей в части управления сценариев")
+
+
+'Аудит
+Rel(auth_service, audit_events_data_bus, "Публикация событий авторизации/аутентификации/регистрации пользователя в системе")
+Rel(device_manager_service, audit_events_data_bus, "Публикация событий о регистрации/деактивации устройств")
+Rel(device_monitoring_service, audit_events_data_bus, "Публикация событий об изменений состояний устройств")
+Rel(scenario_manager_service, audit_events_data_bus, "Публикация событий об управлении сценариями")
+Rel(scenario_executor_service, audit_events_data_bus, "Публикация событий об исполнении сценариев")
+Rel(audit_db, audit_events_data_bus, "Потребление пользовательские события в системе")
+Rel(audit_events_service, audit_db, "Получение информации о событиях пользователей/устройств")
+Rel(web_app, audit_events_service, "Получение информации о событиях пользователей/устройств")
+Rel(warmhouse_client, web_app, "Просмотр информации о истории действий; истории активности устройств")
+
+'Устройства
+'=Управление и регистрация
+Rel(warmhouse_client, web_app, "Регистрация устройств")
+Rel(warmhouse_client, web_app, "Регистрация устройств; создание домов")
+Rel(warmhouse_client, web_app, "Управление устройствами")
+Rel(web_app, device_manager_service, "Регистрация устройств; создание домов")
+Rel(web_app, device_manager_service, "Управление устройствами; получение информации об устройств")
+Rel(device_manager_service, warmhouse_client_install, "Удаленное управление устройствами")
+Rel(device_manager_service, device_db, "Сохранение/получение информации об устройствах")
+'=Мониторинг
+Rel(device_manager_service, service_events_data_bus, "Публикация события о регистрации устройства")
+Rel(device_monitoring_service, service_events_data_bus, "Получение событий о регистрации устройств с целью постановки на мониторинг")
+Rel(device_monitoring_service, warmhouse_client_install, "Мониторинг показателей устройств")
+Rel(device_monitoring_service, device_db, "Обновление показателей устройств")
+Rel(web_app, device_monitoring_service, "Получение показателей устройств")
+
+'Сценарии
+Rel(warmhouse_client, web_app, "Управление сценариями")
+Rel(web_app, scenario_manager_service, "Создание/удаление/редактирование сценариев")
+Rel(scenario_manager_service, scenario_db, "Создание/удаление/редактирование сценариев")
+Rel(scenario_manager_service, service_events_data_bus, "Публикация задачи на исполнение сценария")
+Rel(scenario_executor_service, service_events_data_bus, "Получение задачи на исполнение сценария")
+Rel(scenario_executor_service, device_manager_service, "Управление устройствами по пользовательскому сценарию")
+
+SHOW_LEGEND()
+@enduml

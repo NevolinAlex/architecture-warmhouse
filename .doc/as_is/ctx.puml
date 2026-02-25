@@ -18,4 +18,5 @@ Rel(warmhouse_client, warmhouse, "Получение информации о т�
 Rel(warmhouse_engineer, warmhouse, "Регистрация новых устройств")
 Rel(warmhouse_engineer, warmhouse_client_install, "Установка и пуск-наладка устройств")
 
+SHOW_LEGEND()
 @enduml
