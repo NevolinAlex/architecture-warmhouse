@@ -1,0 +1,26 @@
+@startuml Диаграмма компонентов device_monitoring_service
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Component.puml
+
+Container_Boundary(device_monitoring_service, "Сервис мониторинга устройств") {
+    Component(telemetry_collector, "Сборщик телеметрии и монитор устройств", "Java", "Сбор показаний с устройств и мониторинг")
+    Component(data_processor, "Обработчик данных", "Java", "Обработка и агрегация телеметрии")
+    Component(metrics_storage, "Компонент хранения метрик", "Java", "Обновление показателей в БД")
+    Component(event_subscriber, "Подписчик событий", "Java", "Получение событий регистрации")
+    Component(audit_publisher, "Публикатор событий", "Java", "Публикация событий изменений состояния")
+}
+
+ContainerDb(device_db, "СУБД устройств", "PostgreSQL", "Хранит состояния устройств")
+Container(audit_events_data_bus, "Шина данных событий", "Kafka", "Публикация событий")
+Container(service_events_data_bus, "Шина сервисных событий", "Kafka", "Подписка на события")
+System_Ext(iot_devices, "IoT устройства", "Хабы, термостаты, ворота и т.д.")
+
+Rel(telemetry_collector, iot_devices, "Получение телеметрии", "MQTT/HTTP")
+Rel(telemetry_collector, iot_devices, "Проверка состояния", "MQTT/HTTP")
+Rel(metrics_storage, device_db, "Обновление показателей", "JDBC")
+Rel(audit_publisher, audit_events_data_bus, "Публикация событий", "Kafka")
+Rel_Neighbor(event_subscriber, service_events_data_bus, "Получение событий регистрации", "Kafka")
+
+Rel(telemetry_collector, data_processor, "Передача данных")
+Rel(data_processor, metrics_storage, "Обработанные данные")
+Rel(event_subscriber, telemetry_collector, "Новые устройства для мониторинга")
+@enduml

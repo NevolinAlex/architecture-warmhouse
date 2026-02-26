@@ -1,0 +1,31 @@
+@startuml Диаграмма компонентов scenario_executor_service
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Container.puml
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Component.puml
+
+Container_Boundary(scenario_executor_service, "Сервис исполнения сценариев", "Java") {
+    Component(kafka_consumer, "Читатель задач на исполнение сценариев", "Consumer", "Чтение задач из Kafka")
+    Component(scenario_executor, "Исполнитель сценариев", "Service", "Логика исполнения сценариев")
+
+    Component(task_repository, "Репозиторий задач", "Repository", "Управление состоянием задач")
+
+    Component(device_manager_client, "Клиент сервиса управления устройствами", "Client")
+    Component(kafka_producer, "Публикатор событий", "Producer", "Публикация событий исполнения")
+
+    Rel(kafka_consumer, scenario_executor, "Передает задачи")
+
+    Rel(scenario_executor, task_repository, "Сохраняет состояние задач")
+    Rel(scenario_executor, kafka_producer, "Публикует события исполнения")
+
+    Rel(scenario_executor, device_manager_client, "Управляет устройствами")
+}
+
+ContainerDb(scenario_db, "СУБД сценариев", "PostgresSQL", "Хранит состояние задач")
+Container(audit_events_data_bus, "Шина данных событий", "Kafka", "События пользователей/устройств")
+Container(service_events_data_bus, "Шина сервисных событий", "Kafka", "Сервисные события")
+Container(device_manager_service, "Сервис управления устройствами", "Java", "Управление устройствами")
+
+Rel(task_repository, scenario_db, "Сохраняет состояние задач")
+Rel(kafka_consumer, service_events_data_bus, "Получает задачи")
+Rel(kafka_producer, audit_events_data_bus, "Публикует события исполнения")
+Rel(device_manager_client, device_manager_service, "Управляет устройствами")
+@enduml

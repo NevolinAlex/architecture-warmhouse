@@ -1,0 +1,85 @@
+@startuml ScenarioEngine - Уровень кода (C4 Level 4)
+
+package "com.warmhouse.scenario.engine" {
+
+  class ScenarioEngine {
+    +execute(scenarioId: String): ScenarioResult
+    +schedule(scenarioId: String, cron: String): void
+    +cancel(scenarioId: String): boolean
+    -validate(scenario: Scenario): boolean
+    -evaluateTriggers(context: Context): boolean
+    -executeActions(actions: List<Action>): List<ActionResult>
+  }
+
+  class Scenario {
+    -id: String
+    -name: String
+    -enabled: boolean
+    -triggers: List<Trigger>
+    -actions: List<Action>
+    +isEnabled(): boolean
+  }
+
+  interface Trigger {
+    +evaluate(context: Context): boolean
+  }
+
+  class TimeTrigger {
+    -cron: String
+    +evaluate(context: Context): boolean
+  }
+
+  class DeviceTrigger {
+    -deviceId: String
+    -property: String
+    -operator: String
+    -value: Object
+    +evaluate(context: Context): boolean
+  }
+
+  interface Action {
+    +execute(context: Context): ActionResult
+  }
+
+  class DeviceAction {
+    -deviceId: String
+    -command: String
+    -params: Map<String, Object>
+    +execute(context: Context): ActionResult
+  }
+
+  class ScenarioRepository {
+    +findById(id: String): Optional<Scenario>
+    +save(scenario: Scenario): void
+  }
+
+  class DeviceServiceClient {
+    +getState(deviceId: String): DeviceState
+    +sendCommand(deviceId: String, command: String, params: Map): boolean
+  }
+
+  class SchedulerService {
+    +schedule(task: Runnable, cron: String): String
+    +cancel(taskId: String): boolean
+  }
+}
+
+' Внутренние связи
+ScenarioEngine --> ScenarioRepository : "загружает"
+ScenarioEngine --> DeviceServiceClient : "использует"
+ScenarioEngine --> SchedulerService : "планирует"
+Scenario --> Trigger : "имеет"
+Scenario --> Action : "имеет"
+DeviceTrigger --> DeviceServiceClient : "проверяет состояние"
+DeviceAction --> DeviceServiceClient : "отправляет команду"
+TimeTrigger --> SchedulerService : "использует для планирования"
+
+note right of ScenarioEngine
+  Основные функции:
+  1. Исполнение сценариев по триггерам
+  2. Планирование периодических сценариев
+  3. Управление устройствами через DeviceServiceClient
+  4. Валидация и обработка ошибок
+end note
+
+@enduml

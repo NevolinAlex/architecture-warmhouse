@@ -1,0 +1,951 @@
+openapi: 3.0.0
+info:
+  title: API системы "Тёплый дом"
+  description: |
+    API для управления умным домом:
+    - Управление устройствами
+    - Автоматизация через сценарии
+    - Мониторинг телеметрии
+    - Аудит действий
+  version: 1.0.0
+  contact:
+    name: Команда разработки "Тёплый дом"
+    email: dev@warmhouse.ru
+
+servers:
+  - url: https://api.warmhouse.ru/v1
+    description: Production API
+  - url: https://api-dev.warmhouse.ru/v1
+    description: Development API
+
+tags:
+  - name: Устройства
+    description: Управление устройствами умного дома
+  - name: Сценарии
+    description: Управление автоматизацией
+  - name: Мониторинг
+    description: Телеметрия и состояние устройств
+  - name: Аудит
+    description: История действий и событий
+
+security:
+  - BearerAuth: []
+
+paths:
+
+  # ========== УСТРОЙСТВА ==========
+
+  /devices:
+    post:
+      tags: [Устройства]
+      summary: Регистрация нового устройства
+      description: Регистрирует новое устройство в системе и привязывает к дому пользователя
+      operationId: registerDevice
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeviceRegistrationRequest'
+            example:
+              serialNumber: "TH-TS-001-2023"
+              deviceTypeId: "c4a2e8d3-1f47-4b89-bf6d-8c9e1a2b3c4f"
+              houseId: "f8a3b2c1-4d5e-6f7a-8b9c-0d1e2f3a4b5c"
+              name: "Термостат гостиная"
+              location: "Гостиная"
+              protocolConfig:
+                mqtt:
+                  topic: "home/thermostat/livingroom"
+                  qos: 1
+      responses:
+        '201':
+          description: Устройство успешно зарегистрировано
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeviceResponse'
+        '400':
+          description: Неверные данные устройства
+        '403':
+          description: У пользователя нет доступа к указанному дому
+        '409':
+          description: Устройство с таким серийным номером уже зарегистрировано
+
+    get:
+      tags: [Устройства]
+      summary: Получение списка устройств
+      description: Возвращает список устройств пользователя с фильтрацией по дому
+      operationId: getDevices
+      parameters:
+        - name: houseId
+          in: query
+          description: ID дома для фильтрации
+          required: false
+          schema:
+            type: string
+            format: uuid
+        - name: deviceType
+          in: query
+          description: Тип устройства для фильтрации
+          required: false
+          schema:
+            type: string
+            enum: [thermostat, light, camera, gate, sensor]
+        - name: limit
+          in: query
+          description: Максимальное количество устройств
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 50
+        - name: offset
+          in: query
+          description: Смещение для пагинации
+          required: false
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+      responses:
+        '200':
+          description: Список устройств
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  devices:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/DeviceResponse'
+                  total:
+                    type: integer
+                  hasMore:
+                    type: boolean
+
+  /devices/{deviceId}:
+    put:
+      tags: [Устройства]
+      summary: Обновление устройства
+      description: Обновляет информацию об устройстве
+      operationId: updateDevice
+      parameters:
+        - name: deviceId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeviceUpdateRequest'
+      responses:
+        '200':
+          description: Устройство обновлено
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeviceResponse'
+        '404':
+          description: Устройство не найдено
+
+    delete:
+      tags: [Устройства]
+      summary: Удаление устройства
+      description: Удаляет устройство из системы
+      operationId: deleteDevice
+      parameters:
+        - name: deviceId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Устройство успешно удалено
+        '404':
+          description: Устройство не найдено
+
+  /devices/{deviceId}/command:
+    post:
+      tags: [Устройства]
+      summary: Отправка команды устройству
+      description: Отправляет команду на физическое устройство
+      operationId: sendDeviceCommand
+      parameters:
+        - name: deviceId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeviceCommandRequest'
+            example:
+              command: "SET_TEMPERATURE"
+              parameters:
+                temperature: 22.5
+                mode: "heat"
+              timeout: 30
+      responses:
+        '200':
+          description: Команда успешно отправлена
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  commandId:
+                    type: string
+                    format: uuid
+                  deviceState:
+                    $ref: '#/components/schemas/DeviceState'
+        '404':
+          description: Устройство не найдено
+        '409':
+          description: Устройство недоступно
+
+  # ========== СЦЕНАРИИ ==========
+
+  /scenarios:
+    post:
+      tags: [Сценарии]
+      summary: Создание сценария
+      description: Создает новый сценарий автоматизации
+      operationId: createScenario
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ScenarioCreateRequest'
+            example:
+              name: "Утро дома"
+              description: "Автоматизация утреннего подъема"
+              triggers:
+                - type: "TIME"
+                  config:
+                    cronExpression: "0 7 * * *"
+                    timezone: "Europe/Moscow"
+                - type: "DEVICE_STATE"
+                  config:
+                    deviceId: "f8a3b2c1-4d5e-6f7a-8b9c-0d1e2f3a4b5c"
+                    condition: "temperature > 15"
+              actions:
+                - type: "DEVICE_COMMAND"
+                  deviceId: "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+                  command: "TURN_ON"
+                  parameters:
+                    brightness: 50
+                - type: "DELAY"
+                  delaySeconds: 300
+                - type: "DEVICE_COMMAND"
+                  deviceId: "b2c3d4e5-f6g7-8901-bcde-f23456789012"
+                  command: "SET_TEMPERATURE"
+                  parameters:
+                    temperature: 21
+              enabled: true
+      responses:
+        '201':
+          description: Сценарий успешно создан
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScenarioResponse'
+        '400':
+          description: Ошибка валидации сценария
+
+    get:
+      tags: [Сценарии]
+      summary: Получение списка сценариев
+      description: Возвращает список сценариев пользователя
+      operationId: getScenarios
+      parameters:
+        - name: enabled
+          in: query
+          description: Фильтр по статусу активности
+          required: false
+          schema:
+            type: boolean
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+      responses:
+        '200':
+          description: Список сценариев
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  scenarios:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ScenarioResponse'
+                  total:
+                    type: integer
+
+  /scenarios/{scenarioId}:
+    put:
+      tags: [Сценарии]
+      summary: Обновление сценария
+      description: Обновляет существующий сценарий
+      operationId: updateScenario
+      parameters:
+        - name: scenarioId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ScenarioUpdateRequest'
+      responses:
+        '200':
+          description: Сценарий обновлен
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScenarioResponse'
+        '404':
+          description: Сценарий не найден
+
+    delete:
+      tags: [Сценарии]
+      summary: Удаление сценария
+      description: Удаляет сценарий и связанные с ним триггеры и действия
+      operationId: deleteScenario
+      parameters:
+        - name: scenarioId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Сценарий удален
+        '404':
+          description: Сценарий не найден
+
+  /scenarios/{scenarioId}/execute:
+    post:
+      tags: [Сценарии]
+      summary: Ручной запуск сценария
+      description: Запускает выполнение сценария вручную
+      operationId: executeScenario
+      parameters:
+        - name: scenarioId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '202':
+          description: Сценарий запущен на выполнение
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  executionId:
+                    type: string
+                    format: uuid
+                  status:
+                    type: string
+                    enum: [PENDING, RUNNING, COMPLETED]
+        '404':
+          description: Сценарий не найден
+        '409':
+          description: Сценарий уже выполняется
+
+  # ========== МОНИТОРИНГ ==========
+
+  /telemetry/devices/{deviceId}/history:
+    get:
+      tags: [Мониторинг]
+      summary: Получение истории телеметрии
+      description: Возвращает исторические данные телеметрии устройства
+      operationId: getTelemetryHistory
+      parameters:
+        - name: deviceId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: from
+          in: query
+          required: true
+          description: Начало временного интервала (ISO 8601)
+          schema:
+            type: string
+            format: date-time
+        - name: to
+          in: query
+          required: true
+          description: Конец временного интервала (ISO 8601)
+          schema:
+            type: string
+            format: date-time
+        - name: metric
+          in: query
+          description: Фильтр по метрике (например, temperature, humidity)
+          required: false
+          schema:
+            type: string
+        - name: aggregation
+          in: query
+          description: Агрегация данных (average, min, max, sum)
+          required: false
+          schema:
+            type: string
+            enum: [average, min, max, sum, raw]
+            default: raw
+        - name: interval
+          in: query
+          description: Интервал агрегации (например, 1h, 15m)
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: История телеметрии
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  deviceId:
+                    type: string
+                    format: uuid
+                  metrics:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/TelemetryData'
+                  summary:
+                    type: object
+                    properties:
+                      min:
+                        type: number
+                      max:
+                        type: number
+                      average:
+                        type: number
+        '404':
+          description: Устройство не найдено
+
+  /telemetry/devices/{deviceId}/current:
+    get:
+      tags: [Мониторинг]
+      summary: Текущее состояние устройства
+      description: Возвращает текущие показатели устройства
+      operationId: getCurrentTelemetry
+      parameters:
+        - name: deviceId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Текущее состояние устройства
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  deviceId:
+                    type: string
+                    format: uuid
+                  timestamp:
+                    type: string
+                    format: date-time
+                  status:
+                    type: string
+                    enum: [ONLINE, OFFLINE, ERROR]
+                  metrics:
+                    type: object
+                    additionalProperties:
+                      oneOf:
+                        - type: number
+                        - type: string
+                        - type: boolean
+                  lastUpdated:
+                    type: string
+                    format: date-time
+        '404':
+          description: Устройство не найдено
+
+  # ========== АУДИТ ==========
+
+  /audit/events:
+    get:
+      tags: [Аудит]
+      summary: Получение логов аудита
+      description: Возвращает записи аудита с фильтрацией
+      operationId: getAuditEvents
+      parameters:
+        - name: userId
+          in: query
+          description: Фильтр по пользователю
+          required: false
+          schema:
+            type: string
+            format: uuid
+        - name: entityType
+          in: query
+          description: Тип сущности (device, scenario, user, etc.)
+          required: false
+          schema:
+            type: string
+        - name: actionType
+          in: query
+          description: Тип действия (CREATE, UPDATE, DELETE, EXECUTE)
+          required: false
+          schema:
+            type: string
+        - name: from
+          in: query
+          description: Начало временного интервала
+          required: false
+          schema:
+            type: string
+            format: date-time
+        - name: to
+          in: query
+          description: Конец временного интервала
+          required: false
+          schema:
+            type: string
+            format: date-time
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 1000
+            default: 100
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+      responses:
+        '200':
+          description: Список событий аудита
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  events:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/AuditEvent'
+                  total:
+                    type: integer
+                  hasMore:
+                    type: boolean
+
+  /audit/devices/{deviceId}/events:
+    get:
+      tags: [Аудит]
+      summary: История событий устройства
+      description: Возвращает историю всех событий связанных с устройством
+      operationId: getDeviceAuditEvents
+      parameters:
+        - name: deviceId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: from
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date-time
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 500
+            default: 50
+      responses:
+        '200':
+          description: История событий устройства
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  deviceId:
+                    type: string
+                    format: uuid
+                  events:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/AuditEvent'
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+
+    # Устройства
+    DeviceRegistrationRequest:
+      type: object
+      required:
+        - serialNumber
+        - deviceTypeId
+        - houseId
+      properties:
+        serialNumber:
+          type: string
+          maxLength: 100
+        deviceTypeId:
+          type: string
+          format: uuid
+        houseId:
+          type: string
+          format: uuid
+        name:
+          type: string
+          maxLength: 100
+        location:
+          type: string
+          maxLength: 100
+        protocolConfig:
+          type: object
+          additionalProperties: true
+
+    DeviceUpdateRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          maxLength: 100
+        location:
+          type: string
+          maxLength: 100
+        enabled:
+          type: boolean
+
+    DeviceCommandRequest:
+      type: object
+      required:
+        - command
+      properties:
+        command:
+          type: string
+          maxLength: 50
+        parameters:
+          type: object
+          additionalProperties: true
+        timeout:
+          type: integer
+          description: Таймаут выполнения команды в секундах
+          minimum: 1
+          maximum: 300
+
+    DeviceResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        serialNumber:
+          type: string
+        deviceType:
+          $ref: '#/components/schemas/DeviceTypeInfo'
+        houseId:
+          type: string
+          format: uuid
+        name:
+          type: string
+        location:
+          type: string
+        status:
+          type: string
+          enum: [ONLINE, OFFLINE, ERROR]
+        lastSeen:
+          type: string
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    DeviceTypeInfo:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        vendor:
+          type: string
+        model:
+          type: string
+        protocol:
+          type: string
+        capabilities:
+          type: array
+          items:
+            type: string
+
+    DeviceState:
+      type: object
+      properties:
+        deviceId:
+          type: string
+          format: uuid
+        timestamp:
+          type: string
+          format: date-time
+        metrics:
+          type: object
+          additionalProperties:
+            oneOf:
+              - type: number
+              - type: string
+              - type: boolean
+              - type: object
+
+    # Сценарии
+    TriggerConfig:
+      type: object
+      required:
+        - type
+      properties:
+        type:
+          type: string
+          enum: [TIME, DEVICE_STATE, MANUAL, SCHEDULE]
+        config:
+          type: object
+          additionalProperties: true
+        cronExpression:
+          type: string
+        deviceId:
+          type: string
+          format: uuid
+        condition:
+          type: string
+
+    ActionConfig:
+      type: object
+      required:
+        - type
+      properties:
+        type:
+          type: string
+          enum: [DEVICE_COMMAND, NOTIFICATION, DELAY, CONDITION]
+        deviceId:
+          type: string
+          format: uuid
+        command:
+          type: string
+        parameters:
+          type: object
+          additionalProperties: true
+        delaySeconds:
+          type: integer
+          minimum: 1
+        notification:
+          $ref: '#/components/schemas/NotificationConfig'
+
+    NotificationConfig:
+      type: object
+      properties:
+        title:
+          type: string
+        message:
+          type: string
+        channels:
+          type: array
+          items:
+            type: string
+            enum: [EMAIL, PUSH, SMS]
+
+    ScenarioCreateRequest:
+      type: object
+      required:
+        - name
+        - triggers
+        - actions
+      properties:
+        name:
+          type: string
+          maxLength: 100
+        description:
+          type: string
+          maxLength: 500
+        triggers:
+          type: array
+          items:
+            $ref: '#/components/schemas/TriggerConfig'
+          minItems: 1
+        actions:
+          type: array
+          items:
+            $ref: '#/components/schemas/ActionConfig'
+          minItems: 1
+        enabled:
+          type: boolean
+          default: true
+
+    ScenarioUpdateRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          maxLength: 100
+        description:
+          type: string
+          maxLength: 500
+        triggers:
+          type: array
+          items:
+            $ref: '#/components/schemas/TriggerConfig'
+        actions:
+          type: array
+          items:
+            $ref: '#/components/schemas/ActionConfig'
+        enabled:
+          type: boolean
+
+    ScenarioResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        description:
+          type: string
+        triggers:
+          type: array
+          items:
+            $ref: '#/components/schemas/TriggerConfig'
+        actions:
+          type: array
+          items:
+            $ref: '#/components/schemas/ActionConfig'
+        enabled:
+          type: boolean
+        lastExecuted:
+          type: string
+          format: date-time
+        executionCount:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    # Мониторинг
+    TelemetryData:
+      type: object
+      properties:
+        timestamp:
+          type: string
+          format: date-time
+        deviceId:
+          type: string
+          format: uuid
+        metricName:
+          type: string
+        value:
+          oneOf:
+            - type: number
+            - type: string
+            - type: boolean
+        unit:
+          type: string
+
+    # Аудит
+    AuditEvent:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        userId:
+          type: string
+          format: uuid
+        userEmail:
+          type: string
+        actionType:
+          type: string
+        entityType:
+          type: string
+        entityId:
+          type: string
+          format: uuid
+        details:
+          type: object
+          additionalProperties: true
+        ipAddress:
+          type: string
+        userAgent:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
+
+    # Ошибки
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+        message:
+          type: string
+        details:
+          type: object
+          additionalProperties: true
+        timestamp:
+          type: string
+          format: date-time
+        path:
+          type: string

@@ -1,0 +1,48 @@
+@startuml Диаграмма компонентов device_manager_service
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Container.puml
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Component.puml
+
+Container_Boundary(device_manager_service, "Сервис инвентаризации и управления устройствами", "Java") {
+
+    Component(inventory_controller, "Контроллер инвентаризации устройств", "HTTP/REST")
+    Component(devices_manager_controller, "Контроллер управления устройствами", "HTTP/REST")
+    Component(device_registration_service, "Сервис регистрации устройств", "Service", "Бизнес-логика регистрации устройств")
+    Component(device_control_service, "Сервис управления устройствами", "Service", "Бизнес-логика управления устройствами")
+    Component(device_inventory_service, "Сервис инвентаризации устройств", "Service", "Бизнес-логика инвентаризации")
+
+    Component(device_repository, "Репозиторий устройств", "Repository", "Доступ к данным устройств")
+
+    Component(auth_client, "Клиент сервиса авторизации", "Client", "Клиент сервиса авторизации")
+    Component(device_protocol_adapter, "Адаптер протоколов устройств", "Adapter", )
+    Component(kafka_producer, "Публикатор событий", "Producer", "Публикация событий в Kafka")
+
+    Rel(inventory_controller, device_registration_service, "Вызывает")
+    Rel(devices_manager_controller, device_control_service, "Вызывает")
+    Rel(inventory_controller, device_inventory_service, "Вызывает")
+
+    Rel(device_registration_service, device_repository, "Использует")
+    Rel(device_registration_service, auth_client, "Проверяет права")
+    Rel(device_registration_service, kafka_producer, "Публикует события регистрации")
+
+    Rel(device_control_service, device_repository, "Использует")
+    Rel(device_control_service, device_protocol_adapter, "Отправляет команды")
+    Rel(device_control_service, kafka_producer, "Публикует события управления")
+
+    Rel(device_inventory_service, device_repository, "Использует")
+}
+
+ContainerDb(device_db, "СУБД устройств", "PostgresSQL", "Хранит устройства и их состояние")
+Container(audit_events_data_bus, "Шина данных событий аудита", "Kafka", "События пользователей/устройств")
+Container(service_events_data_bus, "Шина данных сервисных событий", "Kafka", "События о регистрации/удаления устройств")
+Container(warmhouse_client_install, "IoT устройства", "Различные", "Устройства пользователя")
+Container(auth_service, "Сервис авторизации", "Keycloak", "Управление пользователями")
+Container(web_app, "WEB-интерфейс", "ReactJS", "Пользовательский интерфейс")
+
+Rel(device_repository, device_db, "Сохраняет/получает устройства")
+Rel(kafka_producer, audit_events_data_bus, "Публикует события аудита")
+Rel(kafka_producer, service_events_data_bus, "Публикует события регистрации/удаления новых устройств")
+Rel(device_protocol_adapter, warmhouse_client_install, "Управляет устройствами")
+Rel(auth_client, auth_service, "Проверяет авторизацию")
+Rel(web_app, devices_manager_controller, "Вызывает API")
+Rel(web_app, inventory_controller, "Вызывает API")
+@enduml
