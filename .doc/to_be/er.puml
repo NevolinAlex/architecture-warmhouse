@@ -1,0 +1,235 @@
+@startuml ER Diagram - Система "Тёплый дом"
+
+' ========== ОСНОВНЫЕ СУЩНОСТИ ==========
+
+entity "Пользователь" as User {
+  * id: UUID <<PK>>
+  --
+  * email: VARCHAR(255) <<UNIQUE>>
+  * password_hash: VARCHAR(255)
+  * full_name: VARCHAR(255)
+  phone: VARCHAR(20)
+  created_at: TIMESTAMP
+  updated_at: TIMESTAMP
+  is_active: BOOLEAN
+}
+
+entity "Дом" as House {
+  * id: UUID <<PK>>
+  --
+  * user_id: UUID <<FK>>
+  * name: VARCHAR(100)
+  address: TEXT
+  timezone: VARCHAR(50)
+  created_at: TIMESTAMP
+  updated_at: TIMESTAMP
+}
+
+entity "Устройство" as Device {
+  * id: UUID <<PK>>
+  --
+  * house_id: UUID <<FK>>
+  * device_type_id: UUID <<FK>>
+  * serial_number: VARCHAR(100) <<UNIQUE>>
+  name: VARCHAR(100)
+  location: VARCHAR(100)
+  status: ENUM('online', 'offline', 'error')
+  last_seen: TIMESTAMP
+  created_at: TIMESTAMP
+  updated_at: TIMESTAMP
+}
+
+entity "Тип устройства" as DeviceType {
+  * id: UUID <<PK>>
+  --
+  * vendor: VARCHAR(100)
+  * model: VARCHAR(100)
+  * protocol: ENUM('mqtt', 'http', 'zigbee', 'zwave')
+  capabilities: JSONB
+  description: TEXT
+}
+
+entity "Состояние устройства" as DeviceState {
+  * id: UUID <<PK>>
+  --
+  * device_id: UUID <<FK>>
+  * timestamp: TIMESTAMP
+  * metric_name: VARCHAR(50)
+  metric_value: JSONB
+  unit: VARCHAR(20)
+}
+
+entity "Сценарий" as Scenario {
+  * id: UUID <<PK>>
+  --
+  * user_id: UUID <<FK>>
+  * name: VARCHAR(100)
+  description: TEXT
+  is_enabled: BOOLEAN
+  priority: INTEGER
+  created_at: TIMESTAMP
+  updated_at: TIMESTAMP
+}
+
+entity "Триггер" as Trigger {
+  * id: UUID <<PK>>
+  --
+  * scenario_id: UUID <<FK>>
+  * trigger_type: ENUM('time', 'device_state', 'manual')
+  config: JSONB
+  cron_expression: VARCHAR(50)
+  device_id: UUID <<FK>>
+  condition: JSONB
+}
+
+entity "Действие" as Action {
+  * id: UUID <<PK>>
+  --
+  * scenario_id: UUID <<FK>>
+  * action_type: ENUM('device_command', 'notification', 'delay')
+  * device_id: UUID <<FK>>
+  command: VARCHAR(50)
+  parameters: JSONB
+  order_index: INTEGER
+}
+
+entity "История исполнения" as ExecutionHistory {
+  * id: UUID <<PK>>
+  --
+  * scenario_id: UUID <<FK>>
+  * trigger_id: UUID <<FK>>
+  * started_at: TIMESTAMP
+  finished_at: TIMESTAMP
+  status: ENUM('success', 'failed', 'partial')
+  error_message: TEXT
+}
+
+entity "Аудит действий" as AuditLog {
+  * id: UUID <<PK>>
+  --
+  * user_id: UUID <<FK>>
+  * action_type: VARCHAR(50)
+  * entity_type: VARCHAR(50)
+  entity_id: UUID
+  details: JSONB
+  ip_address: VARCHAR(45)
+  user_agent: TEXT
+  created_at: TIMESTAMP
+}
+
+' ========== СВЯЗИ ==========
+
+' Пользователь - Дом (1:N)
+User ||--o{ House : "владеет"
+
+' Дом - Устройство (1:N)
+House ||--o{ Device : "содержит"
+
+' Тип устройства - Устройство (1:N)
+DeviceType ||--o{ Device : "имеет тип"
+
+' Устройство - Состояние устройства (1:N)
+Device ||--o{ DeviceState : "имеет состояния"
+
+' Пользователь - Сценарий (1:N)
+User ||--o{ Scenario : "создает"
+
+' Сценарий - Триггер (1:N)
+Scenario ||--o{ Trigger : "имеет триггеры"
+
+' Сценарий - Действие (1:N)
+Scenario ||--o{ Action : "имеет действия"
+
+' Сценарий - История исполнения (1:N)
+Scenario ||--o{ ExecutionHistory : "имеет историю"
+
+' Триггер - История исполнения (1:N)
+Trigger ||--o{ ExecutionHistory : "логирует"
+
+' Устройство - Триггер (1:N) - для триггеров по состоянию устройства
+Device ||--o{ Trigger : "используется в триггерах"
+
+' Устройство - Действие (1:N) - для действий с устройствами
+Device ||--o{ Action : "используется в действиях"
+
+' Пользователь - Аудит действий (1:N)
+User ||--o{ AuditLog : "совершает действия"
+
+' ========== ДОПОЛНИТЕЛЬНЫЕ СУЩНОСТИ ==========
+
+entity "Группа устройств" as DeviceGroup {
+  * id: UUID <<PK>>
+  --
+  * user_id: UUID <<FK>>
+  * name: VARCHAR(100)
+  description: TEXT
+}
+
+entity "Устройство в группе" as DeviceGroupMember {
+  * id: UUID <<PK>>
+  --
+  * group_id: UUID <<FK>>
+  * device_id: UUID <<FK>>
+  added_at: TIMESTAMP
+}
+
+entity "Расписание" as Schedule {
+  * id: UUID <<PK>>
+  --
+  * scenario_id: UUID <<FK>>
+  * cron_expression: VARCHAR(50)
+  timezone: VARCHAR(50)
+  start_date: DATE
+  end_date: DATE
+  is_active: BOOLEAN
+}
+
+entity "Уведомление" as Notification {
+  * id: UUID <<PK>>
+  --
+  * user_id: UUID <<FK>>
+  * type: ENUM('alert', 'info', 'warning')
+  * title: VARCHAR(200)
+  message: TEXT
+  is_read: BOOLEAN
+  created_at: TIMESTAMP
+}
+
+' ========== ДОПОЛНИТЕЛЬНЫЕ СВЯЗИ ==========
+
+' Группа устройств - Устройство (M:N через DeviceGroupMember)
+DeviceGroup ||--o{ DeviceGroupMember : "содержит"
+Device ||--o{ DeviceGroupMember : "входит в"
+
+' Пользователь - Группа устройств (1:N)
+User ||--o{ DeviceGroup : "создает"
+
+' Сценарий - Расписание (1:N)
+Scenario ||--o{ Schedule : "имеет расписание"
+
+' Пользователь - Уведомление (1:N)
+User ||--o{ Notification : "получает"
+
+' ========== КОММЕНТАРИИ К СУЩНОСТЯМ ==========
+
+note top of User
+  Основная сущность системы.
+  Хранит учетные данные пользователей.
+end note
+
+note top of Device
+  Физические устройства умного дома.
+  Каждое устройство привязано к дому.
+end note
+
+note top of Scenario
+  Автоматизация умного дома.
+  Содержит триггеры и действия.
+end note
+
+note top of AuditLog
+  Аудит всех действий в системе.
+  Используется для мониторинга и отладки.
+end note
+
+@enduml

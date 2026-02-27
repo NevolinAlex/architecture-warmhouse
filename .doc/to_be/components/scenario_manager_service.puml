@@ -1,0 +1,34 @@
+@startuml Диаграмма компонентов scenario_manager_service
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Container.puml
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Component.puml
+
+Container_Boundary(scenario_manager_service, "Сервис управления сценариями", "Java") {
+
+    Component(web_controller, "Контроллер управления сценариями", "HTTP/REST")
+    Component(scenario_service, "Сервис управления сценариями", "Service", "Логика управления сценариями")
+
+    Component(scenario_repository, "ScenarioRepository", "Repository", "Доступ к данным сценариев")
+
+    Component(auth_client, "Клиент сервиса авторизации", "Client")
+    Component(kafka_producer, "Публикатор событий", "Producer", "Публикация задач и событий в Kafka")
+
+    Rel(web_controller, scenario_service, "Вызывает")
+
+    Rel(scenario_service, scenario_repository, "Использует")
+    Rel(web_controller, auth_client, "Проверяет права")
+    Rel(scenario_service, kafka_producer, "Публикует события пользовательского аудита")
+    Rel(scenario_service, kafka_producer, "Публикует задачи на исполнение/останов для сервиса исполнения сценариев")
+}
+
+ContainerDb(scenario_db, "СУБД сценариев", "PostgresSQL", "Хранит сценарии и задачи")
+Container(audit_events_data_bus, "Шина данных событий", "Kafka", "События пользователей/устройств")
+Container(service_events_data_bus, "Шина сервисных событий", "Kafka", "Сервисные события")
+Container(auth_service, "Сервис авторизации", "Keycloak", "Управление пользователями")
+Container(web_app, "WEB-интерфейс", "ReactJS", "Пользовательский интерфейс")
+
+Rel(scenario_repository, scenario_db, "Сохраняет/получает сценарии")
+Rel(kafka_producer, audit_events_data_bus, "Публикует события аудита")
+Rel(kafka_producer, service_events_data_bus, "Публикует задачи")
+Rel(auth_client, auth_service, "Проверяет авторизацию")
+Rel(web_app, web_controller, "Управляет сценариями")
+@enduml

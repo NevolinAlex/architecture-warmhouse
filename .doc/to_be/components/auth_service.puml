@@ -1,0 +1,42 @@
+@startuml Сервис управления пользователями (auth_service)
+
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Component.puml
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Container.puml
+
+Container(web_app, "WEB-интерфейс системы «Тёплый дом»", "ReactJS", "Предоставляет пользовательский интерфейс работы с системой «Тёплый дом»")
+Container(device_manager_service, "Сервис инвентаризации и управления устройствами", "Java", "Регистрирует/привязывает устройства к пользователю/дому; предоставляет справочник устройств; управляет устройствами")
+Container(scenario_manager_service, "Сервис управления сценариями", "Java", "Управляет пользовательскими сценариями")
+ContainerDb(user_db, "СУБД пользователей", "PostgresSQL", "Хранит пользователей, роли, полномочия")
+Container(audit_events_data_bus, "Шина данных событий пользователей/устройств в системе", "Kafka", "Сохраняет/предоставляет события пользователей/устройств в системе")
+
+Container_Boundary(auth_service, "Сервис управления пользователями") {
+    Component(auth_controller, "Контроллер авторизации", "REST API", "Обрабатывает HTTP-запросы на аутентификацию и авторизацию")
+    Component(user_controller, "Контроллер пользователей", "REST API", "Управление пользователями и ролями")
+    Component(auth_service_impl, "Сервис аутентификации", "Java", "Логика аутентификации и генерации токенов")
+    Component(user_service, "Сервис пользователей", "Java", "Бизнес-логика управления пользователями")
+    Component(role_service, "Сервис ролей и прав", "Java", "Управление ролями и разрешениями")
+    Component(audit_publisher, "Публикатор событий аудита", "Java/Kafka Client", "Публикует события авторизации и действий пользователей")
+    Component(db_repository, "Репозиторий пользователей", "Java/JPA", "Доступ к данным пользователей в БД")
+}
+
+Rel(device_manager_service, auth_controller, "Авторизация действий пользователей", "HTTP/REST")
+Rel(scenario_manager_service, auth_controller, "Авторизация действий пользователей", "HTTP/REST")
+
+Rel(auth_controller, auth_service_impl, "Использует")
+Rel(auth_controller, user_service, "Использует")
+Rel(user_controller, user_service, "Использует")
+Rel(user_controller, role_service, "Использует")
+Rel(auth_service_impl, db_repository, "Читает/записывает")
+Rel(user_service, db_repository, "Читает/записывает")
+Rel(role_service, db_repository, "Читает/записывает")
+Rel(auth_service_impl, audit_publisher, "Публикует события")
+Rel(user_service, audit_publisher, "Публикует события")
+Rel(role_service, audit_publisher, "Публикует события")
+
+Rel(db_repository, "user_db", "Читает/записывает пользователей и роли", "JDBC")
+Rel(audit_publisher, "audit_events_data_bus", "Публикует события авторизации", "Kafka")
+Rel(web_app, auth_controller, "Вызывает API", "HTTP/REST")
+Rel(web_app, user_controller, "Вызывает API", "HTTP/REST")
+
+
+@enduml

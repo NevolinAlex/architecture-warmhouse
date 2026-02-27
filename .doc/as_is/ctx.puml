@@ -1,0 +1,22 @@
+@startuml Контекстная диаграмма "Тёплый дом" As-Is
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Context.puml
+
+Person(warmhouse_engineer, "Специалист", "Специалист по подключению системы отопления компании «Тёплый дом»")
+
+System(warmhouse, "Система «Тёплый дом»", "Система контроля и мониторинга температуры и отопления компании «Тёплый дом»")
+
+
+Person_Ext(warmhouse_client, "Пользователь", "Пользователь системы отопления компании «Тёплый дом»")
+System(warmhouse_client_install, "Система отопления пользователя", "Система «Тёплый дом», установленная у пользователя")
+
+Rel(warmhouse, warmhouse_client_install, "Управление отоплением")
+Rel(warmhouse, warmhouse_client_install, "Получение данных о температуре")
+
+Rel(warmhouse_client, warmhouse, "Управление отоплением")
+Rel(warmhouse_client, warmhouse, "Получение информации о температуре")
+
+Rel(warmhouse_engineer, warmhouse, "Регистрация новых устройств")
+Rel(warmhouse_engineer, warmhouse_client_install, "Установка и пуск-наладка устройств")
+
+SHOW_LEGEND()
+@enduml

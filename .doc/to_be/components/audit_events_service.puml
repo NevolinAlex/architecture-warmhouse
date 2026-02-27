@@ -1,0 +1,25 @@
+@startuml Сервис управления пользователями (audit_events_service)
+
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Component.puml
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Container.puml
+
+Container(web_app, "WEB-интерфейс системы «Тёплый дом»", "ReactJS", "Предоставляет пользовательский интерфейс работы с системой «Тёплый дом»")
+ContainerDb(audit_db, "СУБД событий пользователей (аудит) системы", "ClickHouse", "Хранение пользовательских событий")
+Container(auth_service, "Сервис управления пользователями", "Java", "Управляет пользователями и полномочиях; аутентифицирует и авторизует пользователей в системе")
+
+Container_Boundary(audit_events_service, "Сервис аудита пользователей и устройств") {
+   Component(events_controller, "Контроллер событий", "REST API", "Предоставление истории событий пользователям")
+   Component(events_service, "Сервис событий", "Java", "Бизнес-логика предоставления истории событий пользователям")
+   Component(events_repository, "Репозиторий событий", "Java/JPA", "Доступ к истории событий в БД")
+   Component(auth_client, "Клиент сервиса авторизации", "Client", "Клиент сервиса авторизации")
+
+}
+
+Rel(auth_client, auth_service, "Авторизация действий пользователей", "HTTP/REST")
+Rel(web_app, events_controller, "Вызывает API получения истории событий", "HTTP/REST")
+Rel(web_app, events_controller, "Вызывает API получения истории событий", "HTTP/REST")
+Rel(events_controller, auth_client, "Использует")
+Rel(events_controller, events_service, "Использует")
+Rel(events_service, events_repository, "Читает/записывает")
+Rel(events_repository, audit_db, "Читает данные", "JDBC")
+@enduml
