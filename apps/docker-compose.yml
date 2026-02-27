@@ -4,6 +4,10 @@ services:
   postgres:
     image: postgres:16-alpine
     container_name: smarthome-postgres
+    environment:
+      POSTGRES_DB: postgres
+      POSTGRES_USER: postgres_user
+      POSTGRES_PASSWORD: postgres_password
     ports:
       - "5432:5432"
     volumes:
@@ -39,6 +43,7 @@ services:
       temperature-api:
         condition: service_started
     environment:
+      - DATABASE_URL=postgres://postgres_user:postgres_password@postgres:5432/smarthome
       - TEMPERATURE_API_URL=http://temperature-api:8081
     ports:
       - "8080:8080"
